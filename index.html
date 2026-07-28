@@ -1,0 +1,696 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Read Aloud Bar</title>
+<style>
+  :root{
+    --paper:#E8EAED;
+    --card:#FFFFFF;
+    --ink:#14171C;
+    --muted:#737B87;
+    --rule:#D3D7DD;
+    --accent:#2340E8;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;padding:56px 24px 140px;background:var(--paper);color:var(--ink);
+    font:400 15px/1.6 var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:680px;margin:0 auto}
+  h1{font:600 clamp(26px,5vw,38px)/1.05 var(--mono);letter-spacing:-.045em;margin:0 0 10px}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 40px;max-width:46ch}
+  section{border-top:1px solid var(--rule);padding:26px 0 4px}
+  .eyebrow{font:500 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin:0 0 14px}
+  h2{font:600 17px/1.3 var(--sans);margin:0 0 10px;letter-spacing:-.01em}
+  p{margin:0 0 14px}
+  p.note{color:var(--muted);font-size:13.5px}
+  .card{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:20px}
+  .sample{font-size:15.5px;line-height:1.65}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:16px}
+  button.act{font:600 13.5px var(--sans);color:#fff;background:var(--accent);border:0;border-radius:9px;padding:11px 16px;cursor:pointer}
+  button.act.ghost{background:transparent;color:var(--ink);border:1px solid var(--rule)}
+  button.act:focus-visible,a.drag:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .ok{font:500 12px var(--mono);color:var(--accent);opacity:0;transition:opacity .18s}
+  .ok.show{opacity:1}
+  a.drag{display:inline-flex;align-items:center;gap:9px;font:600 13.5px var(--sans);color:var(--ink);text-decoration:none;background:var(--card);border:1px solid var(--ink);border-radius:9px;padding:11px 16px;cursor:grab}
+  a.drag::before{content:"⠿";font-size:15px;color:var(--muted)}
+  details{margin-top:18px}
+  summary{cursor:pointer;font:500 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  pre{background:var(--card);border:1px solid var(--rule);border-radius:10px;padding:14px;overflow:auto;font:400 11.5px/1.55 var(--mono);margin-top:12px}
+  ul{margin:0;padding-left:18px}
+  li{margin-bottom:9px}
+  .kb{font:500 12px var(--mono);border:1px solid var(--rule);border-bottom-width:2px;border-radius:5px;padding:1px 6px;background:var(--card)}
+  textarea.hidden{position:absolute;left:-9999px;top:0}
+  .arch{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--rule);border-radius:12px;overflow:hidden;background:var(--card);margin-bottom:14px}
+  .arch>div{padding:16px 18px}
+  .arch>div:first-child{border-right:1px solid var(--rule)}
+  .arch h3{font:500 11px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+  .arch p{font-size:13.5px;margin:0;color:var(--muted)}
+</style>
+
+<div class="wrap">
+  <h1>Read Aloud Bar<span>.</span></h1>
+  <p class="sub">A floating speech controller for any page. Sentence-level navigation and highlighting, article-only extraction, and settings that persist.</p>
+
+  <section>
+    <p class="eyebrow">Try it first</p>
+    <h2>This is the real thing, running here</h2>
+    <p class="note">Press play. The current sentence highlights as it reads; the skip buttons move exactly one sentence.</p>
+    <div class="card">
+      <p class="sample" id="sample">The trouble with reading at speed is that the eye is a poor pacemaker. It slows for a difficult clause, then races through a familiar one. You finish a long essay with no clear sense of where the time went. Speech has no such problem. A voice set to three hundred words a minute holds that pace whether the sentence is easy or hard. This is uncomfortable for about a week. Then it becomes the only way you want to get through a backlog.</p>
+      <div class="row">
+        <button class="act" id="demo">Play this paragraph</button>
+        <button class="act ghost" id="demoStop">Stop</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Install</p>
+    <h2>Put it on your bookmarks bar</h2>
+    <p>Drag the button onto your bookmarks bar. If dragging doesn't take, copy the code, make a new bookmark by hand, and paste it into the URL field. Replacing an older copy: overwrite that bookmark's URL with this one.</p>
+    <div class="row">
+      <a class="drag" id="dragme" href="#">Read Aloud Bar</a>
+      <button class="act ghost" id="copy">Copy code</button>
+      <span class="ok" id="ok">Copied</span>
+    </div>
+    <details>
+      <summary>Show readable source</summary>
+      <pre id="src"></pre>
+    </details>
+    <textarea class="hidden" id="stash" readonly></textarea>
+  </section>
+
+  <section>
+    <p class="eyebrow">Controls</p>
+    <h2>What the bar does</h2>
+    <ul>
+      <li><span class="kb">Highlight</span> tints the sentence being spoken and keeps it in view. It paints through the CSS Custom Highlight API where available and floating overlay rectangles otherwise — neither one edits the page's markup. The tint stays put while paused and clears on stop.</li>
+      <li><span class="kb">◀◀</span> <span class="kb">▶▶</span> move exactly one sentence, whatever the internal chunking is doing. While playing, narration continues from the new sentence; while paused, the position moves and playback stays paused.</li>
+      <li>The counter reads <span class="kb">14 / 87 sentences</span> for whatever you're reading — a selection if you made one, the article if you didn't.</li>
+      <li>On Substack, the byline, date, like and comment and restack counts, and the share controls are excluded before extraction; title, subtitle, headings, lists, quotes and captions are kept. Elsewhere the same idea applies to nav, footers, cookie notices, signup prompts, comment threads and recommendation widgets.</li>
+      <li>Voice, speed and the highlight setting persist in localStorage across pages. Ava Online is the default on a fresh install, Samantha next, then whatever's available — but a saved choice always wins.</li>
+      <li>Punctuation reaches the engine untouched, so sentences keep their normal falling intonation and end-of-sentence pause.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+function ttsBar(demoRoot){
+  var D=document, W=window, S=W.speechSynthesis;
+  if(!S){alert("This browser has no speech synthesis.");return;}
+  var prev=D.getElementById("__ttsbar");
+  if(prev){S.cancel();prev.remove();}
+  var prevHl=D.getElementById("__ttsbarhl"); if(prevHl)prevHl.remove();
+  var prevSt=D.getElementById("__ttsbarstyle"); if(prevSt)prevSt.remove();
+
+  /* ============================ preferences ============================ */
+  var PKEY="readAloudBar.v3";
+  function loadPrefs(){
+    try{
+      var o=JSON.parse(W.localStorage.getItem(PKEY)||"{}");
+      if(!o||typeof o!=="object"||o instanceof Array)return {};
+      return o;
+    }catch(e){return {};}
+  }
+  function savePrefs(){
+    try{
+      W.localStorage.setItem(PKEY,JSON.stringify({
+        voice:voice?voice.name:null,
+        rate:rate,
+        highlight:!!highlight
+      }));
+    }catch(e){}
+  }
+  var prefs=loadPrefs();
+  var rate=(typeof prefs.rate==="number"&&isFinite(prefs.rate)&&prefs.rate>=0.5&&prefs.rate<=4)?prefs.rate:3;
+  var highlight=(typeof prefs.highlight==="boolean")?prefs.highlight:true;
+  var savedVoiceName=(typeof prefs.voice==="string"&&prefs.voice)?prefs.voice:null;
+
+  /* ======================== content identification ===================== */
+  var JUNK_TAG=/^(SCRIPT|STYLE|NOSCRIPT|NAV|ASIDE|FORM|BUTTON|SELECT|OPTION|TEXTAREA|INPUT|LABEL|IFRAME|SVG|CANVAS|VIDEO|AUDIO|HEADER|FOOTER|DIALOG|TEMPLATE)$/;
+  var JUNK_ROLE=/^(navigation|banner|contentinfo|complementary|search|button|dialog|alert|alertdialog|menu|menubar|tablist|toolbar|form)$/i;
+  var JUNK_WORD=/(?:^|[\s_-])(?:nav|navbar|navigation|menu|masthead|sidebar|widget|promo|advert|advertisement|ads|adslot|banner|cookie|consent|gdpr|subscribe|subscription|signup|newsletter|paywall|share|sharing|social|comment|comments|disqus|related|recommend|recirc|trending|toolbar|breadcrumb|pagination|byline|author|metadata|timestamp|tags|toc|skip|sr-only|screen-reader|visually-hidden|modal|popup|overlay|dialog|login|ufi|like|likes|restack|reaction|follow|cta|button|btn)(?:[\s_-]|$)/i;
+
+  function attr(el,n){try{return el.getAttribute(n)||"";}catch(e){return "";}}
+  function classOf(el){
+    var c=el.className;
+    if(typeof c!=="string")c=(c&&c.baseVal)||"";
+    return c+" "+(el.id||"");
+  }
+  function visible(el){
+    var s;
+    try{s=W.getComputedStyle(el);}catch(e){return true;}
+    if(!s)return true;
+    if(s.display==="none"||s.visibility==="hidden"||s.visibility==="collapse")return false;
+    if(s.opacity!==""&&parseFloat(s.opacity)<0.05)return false;
+    return true;
+  }
+  var junkCache=new Map();
+  function junky(el){
+    if(junkCache.has(el))return junkCache.get(el);
+    var bad=false;
+    if(JUNK_TAG.test(el.tagName))bad=true;
+    else if(JUNK_ROLE.test(attr(el,"role")))bad=true;
+    else if(attr(el,"aria-hidden")==="true")bad=true;
+    else if(el.hasAttribute&&el.hasAttribute("hidden"))bad=true;
+    else if(JUNK_WORD.test(classOf(el)))bad=true;
+    else if(!visible(el))bad=true;
+    junkCache.set(el,bad);
+    return bad;
+  }
+  function blockOf(el){
+    var e=el;
+    while(e&&e.nodeType===1){
+      var d="";
+      try{d=(W.getComputedStyle(e)||{}).display||"";}catch(_){}
+      if(d&&!/^inline/.test(d)&&d!=="contents")return e;
+      if(/^(P|LI|H1|H2|H3|H4|H5|H6|BLOCKQUOTE|PRE|FIGCAPTION|TD|TH|DD|DT|DIV|SECTION|ARTICLE|BODY)$/.test(e.tagName))return e;
+      e=e.parentElement;
+    }
+    return el;
+  }
+
+  function isSubstack(){
+    try{
+      if(/(^|\.)substack\.com$/i.test(W.location.hostname))return true;
+    }catch(e){}
+    if(D.querySelector(".available-content,[class*='available-content']"))return true;
+    if(D.querySelector("link[href*='substackcdn'],script[src*='substackcdn'],script[src*='substack.com']"))return true;
+    return false;
+  }
+  function firstOf(sels){
+    for(var k=0;k<sels.length;k++){
+      var e=D.querySelector(sels[k]);
+      if(e&&(e.textContent||"").trim().length)return e;
+    }
+    return null;
+  }
+  function substackRoots(){
+    var body=firstOf([".body.markup","[class*='body markup']",".available-content","[class*='available-content']",".post-content"]);
+    if(!body)return null;
+    var out=[];
+    var title=firstOf(["h1.post-title","h1[class*='post-title']",".post-header h1","article h1","h1"]);
+    if(title)out.push(title);
+    var sub=firstOf(["h3.subtitle","[class*='subtitle']",".post-header h3"]);
+    if(sub&&sub!==title&&!(title&&title.contains&&title.contains(sub)))out.push(sub);
+    out.push(body);
+    return out;
+  }
+  function densest(){
+    var best=null,bestScore=0;
+    var cands=D.querySelectorAll("article,main,[role=main],section,div");
+    for(var k=0;k<cands.length;k++){
+      var el=cands[k];
+      if(junky(el))continue;
+      var t=(el.textContent||"").length;
+      if(t<250)continue;
+      var links=0,as=el.querySelectorAll("a");
+      for(var m=0;m<as.length;m++)links+=(as[m].textContent||"").length;
+      var ps=el.querySelectorAll("p").length;
+      var score=(t-links*1.5)*(1+Math.min(ps,25)/25);
+      if(score>bestScore){bestScore=score;best=el;}
+    }
+    return best;
+  }
+  function genericRoots(){
+    var out=[];
+    var main=firstOf(["article","[itemprop=articleBody]","[class*='article-body']","[class*='post-body']","[class*='entry-content']","[class*='post-content']","[class*='story-body']","main","[role=main]","#content"]);
+    if(!main||(main.textContent||"").trim().length<200)main=densest()||main;
+    var title=firstOf(["article h1","main h1","h1"]);
+    if(title&&(!main||!main.contains(title)))out.push(title);
+    if(main)out.push(main);
+    else if(D.body)out.push(D.body);
+    return out.length?out:[D.body];
+  }
+
+  /* ===================== extraction with DOM mapping ==================== */
+  /* Builds sentences that each keep a start/end (node,offset) pair so the
+     highlighter can reconstruct a Range without touching page markup. */
+  var sel=null,selRange=null;
+  try{
+    sel=W.getSelection();
+    if(sel&&sel.rangeCount&&!sel.isCollapsed)selRange=sel.getRangeAt(0);
+  }catch(e){}
+
+  var roots;
+  if(demoRoot&&demoRoot.nodeType===1)roots=[demoRoot];
+  else if(selRange)roots=[selRange.commonAncestorContainer.nodeType===1?selRange.commonAncestorContainer:selRange.commonAncestorContainer.parentElement];
+  else roots=(isSubstack()&&substackRoots())||genericRoots();
+
+  var sentences=[],seen=new Set();
+
+  function collect(root){
+    if(!root)return;
+    var walker=D.createTreeWalker(root,NodeFilter.SHOW_TEXT,null,false);
+    var segsByBlock=new Map(),order=[];
+    var node;
+    while((node=walker.nextNode())){
+      if(seen.has(node))continue;
+      var raw=node.nodeValue;
+      if(!raw||!/\S/.test(raw))continue;
+      var from=0,to=raw.length;
+      if(selRange){
+        if(!selRange.intersectsNode(node))continue;
+        if(node===selRange.startContainer)from=selRange.startOffset;
+        if(node===selRange.endContainer)to=selRange.endOffset;
+        if(to<=from)continue;
+      }
+      var p=node.parentElement,bad=false,e=p;
+      while(e&&e!==root){
+        if(e.id==="__ttsbar"||e.id==="__ttsbarhl"||junky(e)){bad=true;break;}
+        e=e.parentElement;
+      }
+      if(bad)continue;
+      seen.add(node);
+      var blk=blockOf(p||root);
+      if(!segsByBlock.has(blk)){segsByBlock.set(blk,[]);order.push(blk);}
+      segsByBlock.get(blk).push({node:node,from:from,to:to});
+    }
+    for(var b=0;b<order.length;b++)emit(segsByBlock.get(order[b]));
+  }
+
+  function emit(segs){
+    var raw="",acc=0,k;
+    for(k=0;k<segs.length;k++){
+      segs[k].acc=acc;
+      var t=segs[k].node.nodeValue.slice(segs[k].from,segs[k].to);
+      segs[k].len=t.length;
+      raw+=t;acc+=t.length;
+    }
+    if(!/\S/.test(raw))return;
+    function locate(off){
+      for(var m=0;m<segs.length;m++){
+        if(off<=segs[m].acc+segs[m].len)
+          return {node:segs[m].node,off:segs[m].from+Math.max(0,off-segs[m].acc)};
+      }
+      var last=segs[segs.length-1];
+      return {node:last.node,off:last.to};
+    }
+    var spans=splitSentences(raw);
+    for(k=0;k<spans.length;k++){
+      var a=spans[k][0],z=spans[k][1];
+      var speech=raw.slice(a,z).replace(/\s+/g," ").trim();
+      if(!speech)continue;
+      sentences.push({text:speech,a:locate(a),b:locate(z)});
+    }
+  }
+
+  /* Sentence boundaries. Punctuation is preserved verbatim in the text that
+     reaches the engine; this only decides where one sentence ends. */
+  function splitSentences(raw){
+    var out=[],start=0,i=0,n=raw.length;
+    var ABBR=/(?:^|\s)(?:mr|mrs|ms|dr|prof|rev|sr|jr|st|vs|etc|al|fig|no|vol|pp|approx|inc|ltd|co|dept|est|ave|blvd|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|e\.g|i\.e|u\.s|u\.k)\.$/i;
+    var INITIAL=/(?:^|\s)[A-Z]\.$/;
+    function push(a,z){
+      while(a<z&&/\s/.test(raw[a]))a++;
+      while(z>a&&/\s/.test(raw[z-1]))z--;
+      if(z>a)out.push([a,z]);
+    }
+    while(i<n){
+      var c=raw[i];
+      if(c==="."||c==="!"||c==="?"||c==="\u2026"){
+        var j=i+1;
+        while(j<n&&/[.!?\u2026"'\u201d\u2019)\]]/.test(raw[j]))j++;
+        if(j>=n||/\s/.test(raw[j])){
+          var head=raw.slice(start,j);
+          if(j<n&&(ABBR.test(head)||INITIAL.test(head))){i=j;continue;}
+          push(start,j);
+          start=j;i=j;continue;
+        }
+        i=j;continue;
+      }
+      i++;
+    }
+    if(start<n)push(start,n);
+    return out;
+  }
+
+  for(var r=0;r<roots.length;r++)collect(roots[r]);
+  if(!sentences.length&&D.body&&roots[0]!==D.body){seen.clear();collect(D.body);}
+  if(!sentences.length){alert("No readable text found. Try selecting a paragraph first.");return;}
+
+  /* ============================== speech =============================== */
+  var MAXC=520,LOOK=4;
+  var curS=0,feed=0,gen=0,state="idle",voice=null,dirty=false;
+  var live=null,lastTick=Date.now(),pausedAt=0;
+
+  /* A chunk is built on demand from a starting sentence, so navigation never
+     inherits a boundary decided earlier. */
+  function chunkFrom(s){
+    var text=sentences[s].text,to=s,offs=[0];
+    while(to+1<sentences.length){
+      var nx=sentences[to+1].text;
+      if(text.length+1+nx.length>MAXC)break;
+      offs.push(text.length+1);
+      text+=" "+nx;to++;
+    }
+    return {text:text,from:s,to:to,offs:offs};
+  }
+
+  function enVoices(){
+    var all=S.getVoices()||[];
+    var en=all.filter(function(v){return /^en/i.test(v.lang)});
+    return en.length?en:all;
+  }
+  function byName(list,re){
+    for(var k=0;k<list.length;k++){if(re.test(list[k].name))return list[k];}
+    return null;
+  }
+  function pickVoice(){
+    var v=enVoices();
+    if(!v.length)return;
+    var saved=savedVoiceName?byName(v,new RegExp("^"+savedVoiceName.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"$")):null;
+    voice=saved
+        ||byName(v,/ava.*online/i)
+        ||byName(v,/ava.*natural/i)
+        ||byName(v,/\bava/i)
+        ||byName(v,/samantha/i)
+        ||byName(v,/online|natural/i)
+        ||v[0]||null;
+    fillVoices();
+  }
+  S.onvoiceschanged=pickVoice;
+
+  function pump(){
+    var ahead=0,q=live?live.to:-1;
+    while(feed<sentences.length&&ahead<LOOK){
+      (function(my){
+        var ck=chunkFrom(feed);
+        var u=new SpeechSynthesisUtterance(ck.text);
+        u.rate=rate;
+        if(voice)u.voice=voice;
+        u.onstart=function(){
+          if(my!==gen)return;
+          live=ck;live.t0=Date.now();live.gotB=false;pausedAt=0;
+          lastTick=Date.now();
+          setSentence(ck.from);
+          pump();
+        };
+        u.onboundary=function(ev){
+          if(my!==gen||live!==ck)return;
+          lastTick=Date.now();
+          if(typeof ev.charIndex!=="number")return;
+          live.gotB=true;
+          setSentence(ck.from+idxAt(ck.offs,ev.charIndex));
+        };
+        u.onend=function(){
+          if(my!==gen||state!=="playing")return;
+          lastTick=Date.now();
+          if(ck.to>=sentences.length-1)finish();
+          else pump();
+        };
+        u.onerror=function(){
+          if(my!==gen||state!=="playing")return;
+          lastTick=Date.now();pump();
+        };
+        S.speak(u);
+        feed=ck.to+1;
+      })(gen);
+      ahead++;
+      if(q!==-1&&feed-q>LOOK*8)break;
+    }
+  }
+  function idxAt(offs,ch){
+    var k=0;
+    while(k+1<offs.length&&ch>=offs[k+1])k++;
+    return k;
+  }
+  function setSentence(n){
+    if(n<0)n=0;
+    if(n>sentences.length-1)n=sentences.length-1;
+    if(n===curS)return;
+    curS=n;render();paint(true);
+  }
+  function startFrom(s){
+    gen++;S.cancel();
+    state="playing";dirty=false;live=null;pausedAt=0;
+    curS=Math.max(0,Math.min(sentences.length-1,s));
+    feed=curS;lastTick=Date.now();
+    render();paint(true);
+    setTimeout(pump,60);
+  }
+  function finish(){
+    gen++;S.cancel();
+    state="idle";live=null;dirty=false;curS=0;feed=0;
+    clearPaint();render();
+  }
+  function toggle(){
+    if(state==="idle")startFrom(curS);
+    else if(state==="playing"){S.pause();state="paused";pausedAt=Date.now();render();}
+    else if(dirty)startFrom(curS);
+    else{
+      S.resume();state="playing";
+      if(live&&pausedAt)live.t0+=Date.now()-pausedAt;
+      pausedAt=0;lastTick=Date.now();render();
+    }
+  }
+  function stop(){
+    gen++;S.cancel();
+    state="idle";live=null;dirty=false;curS=0;feed=0;
+    clearPaint();render();
+  }
+  function jump(d){
+    var t=Math.max(0,Math.min(sentences.length-1,curS+d));
+    if(state==="playing"){startFrom(t);return;}
+    curS=t;
+    if(state==="paused"){gen++;S.cancel();dirty=true;live=null;}
+    render();paint(true);
+  }
+  function reflow(){
+    savePrefs();
+    if(state==="playing")startFrom(curS);
+    else if(state==="paused"){gen++;S.cancel();dirty=true;live=null;}
+  }
+
+  /* Watchdog plus intra-chunk position estimate for voices that emit no
+     boundary events. Never interrupts healthy playback. */
+  var watch=setInterval(function(){
+    if(state!=="playing")return;
+    if(live&&!live.gotB&&live.t0){
+      var cps=15.5*rate;
+      var pos=(Date.now()-live.t0)/1000*cps;
+      setSentence(live.from+idxAt(live.offs,pos));
+    }
+    if(S.speaking||S.pending||S.paused){lastTick=Date.now();return;}
+    if(Date.now()-lastTick>2500)startFrom(curS);
+  },250);
+
+  /* ============================ highlighting =========================== */
+  var HLNAME="ttsbar",hlStyle=null,overlay=null;
+  var hlAPI=!!(W.CSS&&W.CSS.highlights&&W.Highlight);
+  function rangeFor(s){
+    var sn=sentences[s];
+    if(!sn)return null;
+    try{
+      var rg=D.createRange();
+      rg.setStart(sn.a.node,Math.min(sn.a.off,sn.a.node.length));
+      rg.setEnd(sn.b.node,Math.min(sn.b.off,sn.b.node.length));
+      return rg;
+    }catch(e){return null;}
+  }
+  function ensurePaint(){
+    if(hlAPI){
+      if(!hlStyle){
+        hlStyle=D.createElement("style");
+        hlStyle.id="__ttsbarstyle";
+        hlStyle.textContent="::highlight("+HLNAME+"){background-color:#ffe066;color:#14171c;}";
+        (D.head||D.documentElement).appendChild(hlStyle);
+      }
+    }else if(!overlay){
+      overlay=D.createElement("div");
+      overlay.id="__ttsbarhl";
+      overlay.style.cssText="position:fixed;left:0;top:0;width:0;height:0;margin:0;padding:0;border:0;z-index:2147483646;pointer-events:none;";
+      D.body.appendChild(overlay);
+      W.addEventListener("scroll",repaint,true);
+      W.addEventListener("resize",repaint);
+    }
+  }
+  function clearPaint(){
+    try{if(hlAPI&&W.CSS.highlights)W.CSS.highlights.delete(HLNAME);}catch(e){}
+    if(overlay)overlay.textContent="";
+  }
+  function repaint(){if(highlight&&state!=="idle")paint(false);}
+  function paint(scroll){
+    if(!highlight){clearPaint();return;}
+    if(state==="idle"){clearPaint();return;}
+    var rg=rangeFor(curS);
+    if(!rg){clearPaint();return;}
+    ensurePaint();
+    if(hlAPI){
+      try{W.CSS.highlights.set(HLNAME,new W.Highlight(rg));}catch(e){}
+    }else{
+      overlay.textContent="";
+      var rects=[];
+      try{if(typeof rg.getClientRects==="function")rects=rg.getClientRects()||[];}catch(e){rects=[];}
+      for(var k=0;k<rects.length;k++){
+        var q=rects[k];
+        if(q.width<1||q.height<1)continue;
+        var d=D.createElement("div");
+        d.style.cssText="position:fixed;left:"+q.left+"px;top:"+q.top+"px;width:"+q.width+"px;height:"+q.height+"px;background:rgba(255,224,102,.45);border-radius:2px;pointer-events:none;";
+        overlay.appendChild(d);
+      }
+    }
+    if(scroll){
+      try{
+        var b=rg.getBoundingClientRect();
+        if(b.height||b.width){
+          var vh=W.innerHeight||0;
+          if(b.top<70||b.bottom>vh-90)
+            W.scrollTo({top:W.scrollY+b.top-vh*0.35,behavior:"smooth"});
+        }
+      }catch(e){}
+    }
+  }
+
+  /* =============================== the bar ============================= */
+  var bar=D.createElement("div");
+  bar.id="__ttsbar";
+  bar.style.cssText="position:fixed;z-index:2147483647;right:18px;bottom:18px;display:flex;align-items:center;gap:6px;padding:9px 11px 11px;border-radius:13px;background:#12141a;color:#f3f4f6;font:500 12px/1 ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;box-shadow:0 10px 34px rgba(0,0,0,.4);cursor:grab;-webkit-user-select:none;user-select:none;";
+
+  var prog=D.createElement("div");
+  prog.style.cssText="position:absolute;left:11px;right:11px;bottom:5px;height:2px;background:rgba(255,255,255,.16);border-radius:2px;overflow:hidden;";
+  var fill=D.createElement("div");
+  fill.style.cssText="height:100%;width:0;background:#7d95ff;transition:width .15s;";
+  prog.appendChild(fill);bar.appendChild(prog);
+
+  function mk(label,title,fn,min){
+    var b=D.createElement("button");
+    b.textContent=label;b.title=title;
+    b.style.cssText="all:unset;cursor:pointer;text-align:center;min-width:"+(min||22)+"px;padding:6px 5px;border-radius:7px;font:500 12px ui-sans-serif,system-ui,sans-serif;color:#f3f4f6;";
+    b.onmouseenter=function(){if(b.dataset.on!=="1")b.style.background="rgba(255,255,255,.12)"};
+    b.onmouseleave=function(){if(b.dataset.on!=="1")b.style.background="transparent"};
+    b.onclick=function(e){e.stopPropagation();fn();};
+    bar.appendChild(b);
+    return b;
+  }
+
+  mk("◀◀","Previous sentence",function(){jump(-1)});
+  var playBtn=mk("▶","Play / pause",toggle,30);
+  mk("■","Stop",stop);
+  mk("▶▶","Next sentence",function(){jump(1)});
+
+  var hlBtn=mk("Highlight","Highlight the sentence being read",function(){
+    highlight=!highlight;
+    paintHlBtn();savePrefs();
+    if(highlight)paint(true);else clearPaint();
+  },58);
+  function paintHlBtn(){
+    hlBtn.setAttribute("aria-pressed",highlight?"true":"false");
+    hlBtn.dataset.on=highlight?"1":"0";
+    hlBtn.style.background=highlight?"#3d4bd6":"transparent";
+    hlBtn.style.color=highlight?"#ffffff":"#9aa1ae";
+    hlBtn.title=(highlight?"Sentence highlighting on":"Sentence highlighting off")+" — click to turn "+(highlight?"off":"on");
+  }
+  hlBtn.setAttribute("aria-pressed",highlight?"true":"false");
+  paintHlBtn();
+
+  var vsel=D.createElement("select");
+  vsel.title="Voice";
+  vsel.style.cssText="all:unset;cursor:pointer;max-width:100px;padding:5px 6px;border-radius:7px;background:rgba(255,255,255,.1);color:#f3f4f6;font:500 11px ui-sans-serif,system-ui,sans-serif;";
+  vsel.onclick=function(e){e.stopPropagation()};
+  vsel.onchange=function(){
+    var v=enVoices()[vsel.selectedIndex];
+    if(v){voice=v;savedVoiceName=v.name;}
+    reflow();
+  };
+  function fillVoices(){
+    if(!vsel)return;
+    var v=enVoices();
+    vsel.textContent="";
+    for(var k=0;k<v.length;k++){
+      var o=D.createElement("option");
+      o.textContent=v[k].name.replace(/^Microsoft\s+/,"").replace(/\s*\(.*\)$/,"").replace(/\s*-\s*English.*$/i,"");
+      o.style.color="#111";
+      vsel.appendChild(o);
+      if(voice&&v[k].name===voice.name)vsel.selectedIndex=k;
+    }
+  }
+  bar.appendChild(vsel);
+
+  var slider=D.createElement("input");
+  slider.type="range";slider.min="0.5";slider.max="4";slider.step="0.1";slider.value=String(rate);
+  slider.title="Speed";
+  slider.style.cssText="width:80px;accent-color:#7d95ff;cursor:pointer;margin:0 2px;";
+  slider.onclick=function(e){e.stopPropagation()};
+  slider.oninput=function(){rate=parseFloat(slider.value);render();};
+  slider.onchange=function(){reflow();};
+  bar.appendChild(slider);
+
+  var readout=D.createElement("div");
+  readout.style.cssText="font:500 11px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#aeb4c0;min-width:112px;text-align:right;line-height:1.35;";
+  bar.appendChild(readout);
+
+  mk("✕","Close",function(){
+    clearInterval(watch);gen++;S.cancel();clearPaint();
+    try{W.removeEventListener("scroll",repaint,true);W.removeEventListener("resize",repaint);}catch(e){}
+    if(hlStyle)hlStyle.remove();
+    if(overlay)overlay.remove();
+    bar.remove();
+  });
+
+  function render(){
+    playBtn.textContent=state==="playing"?"❚❚":"▶";
+    fill.style.width=(sentences.length?((curS+1)/sentences.length*100):0)+"%";
+    readout.innerHTML=rate.toFixed(1)+"\u00d7 \u00b7 "+Math.round(rate*175)+" wpm<br>"+
+      (curS+1)+" / "+sentences.length+" sentences";
+    if(hlBtn)hlBtn.setAttribute("aria-pressed",highlight?"true":"false");
+  }
+
+  var drag=false,dx=0,dy=0;
+  bar.addEventListener("pointerdown",function(e){
+    if(e.target!==bar&&e.target!==readout)return;
+    var q=bar.getBoundingClientRect();
+    drag=true;dx=e.clientX-q.left;dy=e.clientY-q.top;
+    bar.style.cursor="grabbing";
+    try{bar.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  bar.addEventListener("pointermove",function(e){
+    if(!drag)return;
+    bar.style.left=(e.clientX-dx)+"px";
+    bar.style.top=(e.clientY-dy)+"px";
+    bar.style.right="auto";bar.style.bottom="auto";
+  });
+  bar.addEventListener("pointerup",function(){drag=false;bar.style.cursor="grab";});
+
+  D.body.appendChild(bar);
+  pickVoice();
+  savePrefs();
+  render();
+  startFrom(0);
+}
+
+/* ---- install page wiring (not part of the bookmarklet) ---- */
+(function(){
+  var source="("+ttsBar.toString()+")()";
+  var url="javascript:"+encodeURIComponent(source);
+  document.getElementById("dragme").href=url;
+  document.getElementById("src").textContent=source;
+  document.getElementById("stash").value=url;
+
+  var ok=document.getElementById("ok");
+  function flash(){ok.classList.add("show");setTimeout(function(){ok.classList.remove("show")},1400);}
+
+  document.getElementById("copy").onclick=function(){
+    var ta=document.getElementById("stash");
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(flash,function(){ta.select();document.execCommand("copy");flash();});
+    }else{ta.select();document.execCommand("copy");flash();}
+  };
+  document.getElementById("dragme").onclick=function(e){e.preventDefault();};
+
+  document.getElementById("demo").onclick=function(){
+    ttsBar(document.getElementById("sample"));
+  };
+  document.getElementById("demoStop").onclick=function(){
+    var b=document.getElementById("__ttsbar");
+    speechSynthesis.cancel();
+    if(b)b.remove();
+    var h=document.getElementById("__ttsbarhl");if(h)h.remove();
+    var s=document.getElementById("__ttsbarstyle");if(s)s.remove();
+  };
+})();
+</script>
