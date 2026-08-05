@@ -88,11 +88,12 @@
     <p class="eyebrow">Controls</p>
     <h2>What the bar does</h2>
     <ul>
-      <li><span class="kb">Highlight</span> tints the sentence being spoken and keeps it in view. It paints through the CSS Custom Highlight API where available and floating overlay rectangles otherwise — neither one edits the page's markup. The tint stays put while paused and clears on stop.</li>
+      <li><span class="kb">Highlight</span> tints the sentence being spoken. It paints through the CSS Custom Highlight API where available and floating overlay rectangles otherwise — neither one edits the page's markup. The tint stays put while paused and clears on stop.</li>
+      <li><span class="kb">Scroll</span> keeps the current sentence in view, nudging the page only when the sentence drifts near an edge. Turn it off to read along at your own pace, or to keep your place while the voice runs ahead. It works independently of highlighting — either can be on without the other.</li>
       <li><span class="kb">◀◀</span> <span class="kb">▶▶</span> move exactly one sentence, whatever the internal chunking is doing. While playing, narration continues from the new sentence; while paused, the position moves and playback stays paused.</li>
       <li>The counter reads <span class="kb">14 / 87 sentences</span> for whatever you're reading — a selection if you made one, the article if you didn't.</li>
       <li>On Substack, the byline, date, like and comment and restack counts, and the share controls are excluded before extraction; title, subtitle, headings, lists, quotes and captions are kept. Elsewhere the same idea applies to nav, footers, cookie notices, signup prompts, comment threads and recommendation widgets.</li>
-      <li>Voice, speed and the highlight setting persist in localStorage across pages. Ava Online is the default on a fresh install, Samantha next, then whatever's available — but a saved choice always wins.</li>
+      <li>Voice, speed, and the highlight and scroll settings persist in localStorage across pages. Ava Online is the default on a fresh install, Samantha next, then whatever's available — but a saved choice always wins.</li>
       <li>Punctuation reaches the engine untouched, so sentences keep their normal falling intonation and end-of-sentence pause.</li>
     </ul>
   </section>
@@ -121,13 +122,15 @@ function ttsBar(demoRoot){
       W.localStorage.setItem(PKEY,JSON.stringify({
         voice:voice?voice.name:null,
         rate:rate,
-        highlight:!!highlight
+        highlight:!!highlight,
+        autoscroll:!!autoscroll
       }));
     }catch(e){}
   }
   var prefs=loadPrefs();
   var rate=(typeof prefs.rate==="number"&&isFinite(prefs.rate)&&prefs.rate>=0.5&&prefs.rate<=4)?prefs.rate:3;
   var highlight=(typeof prefs.highlight==="boolean")?prefs.highlight:true;
+  var autoscroll=(typeof prefs.autoscroll==="boolean")?prefs.autoscroll:true;
   var savedVoiceName=(typeof prefs.voice==="string"&&prefs.voice)?prefs.voice:null;
 
   /* ======================== content identification ===================== */
@@ -514,11 +517,23 @@ function ttsBar(demoRoot){
     if(overlay)overlay.textContent="";
   }
   function repaint(){if(highlight&&state!=="idle")paint(false);}
+  function scrollTo(rg){
+    if(!autoscroll||!rg)return;
+    try{
+      var b=rg.getBoundingClientRect();
+      if(b.height||b.width){
+        var vh=W.innerHeight||0;
+        if(b.top<70||b.bottom>vh-90)
+          W.scrollTo({top:W.scrollY+b.top-vh*0.35,behavior:"smooth"});
+      }
+    }catch(e){}
+  }
   function paint(scroll){
-    if(!highlight){clearPaint();return;}
     if(state==="idle"){clearPaint();return;}
     var rg=rangeFor(curS);
     if(!rg){clearPaint();return;}
+    if(scroll)scrollTo(rg);
+    if(!highlight){clearPaint();return;}
     ensurePaint();
     if(hlAPI){
       try{W.CSS.highlights.set(HLNAME,new W.Highlight(rg));}catch(e){}
@@ -533,16 +548,6 @@ function ttsBar(demoRoot){
         d.style.cssText="position:fixed;left:"+q.left+"px;top:"+q.top+"px;width:"+q.width+"px;height:"+q.height+"px;background:rgba(255,224,102,.45);border-radius:2px;pointer-events:none;";
         overlay.appendChild(d);
       }
-    }
-    if(scroll){
-      try{
-        var b=rg.getBoundingClientRect();
-        if(b.height||b.width){
-          var vh=W.innerHeight||0;
-          if(b.top<70||b.bottom>vh-90)
-            W.scrollTo({top:W.scrollY+b.top-vh*0.35,behavior:"smooth"});
-        }
-      }catch(e){}
     }
   }
 
@@ -587,6 +592,20 @@ function ttsBar(demoRoot){
   }
   hlBtn.setAttribute("aria-pressed",highlight?"true":"false");
   paintHlBtn();
+
+  var scBtn=mk("Scroll","Follow the sentence being read",function(){
+    autoscroll=!autoscroll;
+    paintScBtn();savePrefs();
+    if(autoscroll&&state!=="idle")scrollTo(rangeFor(curS));
+  },44);
+  function paintScBtn(){
+    scBtn.setAttribute("aria-pressed",autoscroll?"true":"false");
+    scBtn.dataset.on=autoscroll?"1":"0";
+    scBtn.style.background=autoscroll?"#3d4bd6":"transparent";
+    scBtn.style.color=autoscroll?"#ffffff":"#9aa1ae";
+    scBtn.title=(autoscroll?"Auto-scroll on":"Auto-scroll off")+" — click to turn "+(autoscroll?"off":"on");
+  }
+  paintScBtn();
 
   var vsel=D.createElement("select");
   vsel.title="Voice";
@@ -638,6 +657,7 @@ function ttsBar(demoRoot){
     readout.innerHTML=rate.toFixed(1)+"\u00d7 \u00b7 "+Math.round(rate*175)+" wpm<br>"+
       (curS+1)+" / "+sentences.length+" sentences";
     if(hlBtn)hlBtn.setAttribute("aria-pressed",highlight?"true":"false");
+    if(scBtn)scBtn.setAttribute("aria-pressed",autoscroll?"true":"false");
   }
 
   var drag=false,dx=0,dy=0;
